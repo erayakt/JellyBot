@@ -1,16 +1,25 @@
 import pandas as pd
 import numpy as np
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QGroupBox, QPushButton, QLabel, QFrame, QStatusBar
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QGroupBox, QPushButton, QLabel, QFrame, QStatusBar, QListWidget, QListWidgetItem, QHBoxLayout, QVBoxLayout, QPushButton, QLabel
+from PyQt5.QtCore import QTimer, Qt, QSize
+
 import pyqtgraph as pg
 from config import *
 from utils.data import generate_data
 from utils.ui_helpers import add_shadow
 from widgets.ocean_cube import OceanCubeCanvas
 from PyQt5.QtGui import QFont, QColor, QPalette
+from PyQt5.QtGui import QPixmap, QIcon
+from PyQt5.QtWidgets import QDialog, QVBoxLayout
 
 from utils.life_detector import LifeDetector
 from PyQt5.QtWidgets import QProgressBar
+import os
+
+
+from config import USE_MOCK_DATA
+if not USE_MOCK_DATA:
+    from utils.data import reader
 
 
 # State
@@ -95,6 +104,7 @@ class OceanDashboard(QWidget):
         graph_tabs = QTabWidget(); graph_tabs.setFont(FONT_TITLE)
         graph_tabs.addTab(self._build_env_sensor_tab(), "Env Sensors")
         graph_tabs.addTab(self._build_motion_tab(),      "Motion")
+        graph_tabs.addTab(self._build_photos_tab(), "Photos")
         graph_layout.addWidget(graph_tabs)
         add_shadow(graph_frame)
         main_layout.addWidget(graph_frame, 1, 0)
@@ -337,3 +347,118 @@ class OceanDashboard(QWidget):
         bar.addPermanentWidget(self.interest_bar)
 
         return bar
+
+   
+
+    def _build_photos_tab(self):
+        w = QWidget()
+        v = QVBoxLayout(w)
+
+        # Button Row
+        button_row = QHBoxLayout()
+
+        self.capture_btn = QPushButton("📸 Capture Photo")
+        self.capture_btn.setFont(FONT_BODY)
+        self.capture_btn.setStyleSheet(STYLE_BUTTON)
+        self.capture_btn.clicked.connect(self._capture_photo)
+
+        self.left_btn = QPushButton("⬅️ Rotate Left")
+        self.left_btn.setFont(FONT_BODY)
+        self.left_btn.setStyleSheet(STYLE_BUTTON)
+        self.left_btn.clicked.connect(self._rotate_left)
+
+        self.right_btn = QPushButton("➡️ Rotate Right")
+        self.right_btn.setFont(FONT_BODY)
+        self.right_btn.setStyleSheet(STYLE_BUTTON)
+        self.right_btn.clicked.connect(self._rotate_right)
+
+        for btn in (self.capture_btn, self.left_btn, self.right_btn):
+            button_row.addWidget(btn)
+
+        v.addLayout(button_row)
+
+        # Gallery
+        self.gallery = QListWidget()
+        self.gallery.setViewMode(QListWidget.IconMode)
+        self.gallery.setIconSize(QSize(150, 150))
+        self.gallery.setResizeMode(QListWidget.Adjust)
+        self.gallery.setSpacing(10)
+        self.gallery.setSelectionMode(QListWidget.SingleSelection)
+        self.gallery.setSelectionBehavior(QListWidget.SelectItems)
+
+        self.gallery.itemDoubleClicked.connect(self._show_photo_popup)
+
+        v.addWidget(self.gallery)
+
+        return w
+
+   
+    def _capture_photo(self):
+        if USE_MOCK_DATA:
+            pixmap = QPixmap(150, 150)
+            pixmap.fill(Qt.gray)
+            item = QListWidgetItem(QIcon(pixmap), f"Mock Photo {self.gallery.count()+1}")
+            self.gallery.addItem(item)
+        else:
+            print("[Dashboard] Sending SNAP command")
+            reader.send_command("SNAP")
+            reader.on_photo_received = self._process_photo
+
+
+    def _rotate_left(self):
+        if not USE_MOCK_DATA:
+            reader.send_command("LEFT")
+        print("Rotate Servo Left")
+
+    def _rotate_right(self):
+        if not USE_MOCK_DATA:
+            reader.send_command("RIGHT")
+        print("Rotate Servo Right")
+
+    def _process_photo(self, photo_bytes):
+        print(f"[Dashboard] Received photo, size: {len(photo_bytes)} bytes")
+
+        try:
+            os.makedirs("captured_photos", exist_ok=True)
+            photo_path = f"captured_photos/photo_{self.gallery.count()+1}.jpg"
+            with open(photo_path, "wb") as f:
+                f.write(photo_bytes)
+
+            pixmap = QPixmap(photo_path)
+            icon = QIcon(pixmap.scaled(150, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            item = QListWidgetItem(icon, f"Photo {self.gallery.count()+1}")
+            self.gallery.addItem(item)
+
+            print(f"[Dashboard] Photo saved and displayed: {photo_path}")
+
+        except Exception as e:
+            print("Error processing photo:", e)
+
+
+   
+
+    def _show_photo_popup(self, item):
+        try:
+            # Find the image path based on item index
+            index = self.gallery.row(item)
+            photo_path = f"captured_photos/photo_{index+1}.jpg"
+
+            # Create popup window
+            dialog = QDialog(self)
+            dialog.setWindowTitle(f"Photo {index+1}")
+            dialog.resize(600, 600)
+
+            layout = QVBoxLayout(dialog)
+            label = QLabel()
+            pixmap = QPixmap(photo_path)
+
+            # Scale pixmap nicely
+            label.setPixmap(pixmap.scaled(dialog.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            label.setAlignment(Qt.AlignCenter)
+
+            layout.addWidget(label)
+
+            dialog.exec_()
+
+        except Exception as e:
+            print("Error opening photo:", e)

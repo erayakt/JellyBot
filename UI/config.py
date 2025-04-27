@@ -43,7 +43,7 @@ GRAPH_Y_LIMITS = {
     "Gyro": (-200, 200),          # -200°/s to 200°/s
 }
 
-USE_MOCK_DATA = True
+USE_MOCK_DATA = False
 
 # If not using mock, configure serial connection
 SERIAL_PORT = "COM3" 
