@@ -5,13 +5,13 @@
 #include <MPU6050.h>   // Include MPU6050 library
 
 // Pin connected to the data line of the DS18B20
-#define ONE_WIRE_BUS 14
+#define ONE_WIRE_BUS 13
 
 // TDS setup (GPIO15)
-#define TDS_PIN 15
+#define TDS_PIN 12
 
 // Flexible Pressure Detector Pin
-#define FLEX_PIN 12
+//#define FLEX_PIN 12
 
 // Create a OneWire instance
 OneWire oneWire(ONE_WIRE_BUS);
@@ -35,7 +35,7 @@ void setup() {
   sensors.begin();
 
   // Initialize I2C communication for the MPU6050 with custom SDA and SCL pins
-  Wire.begin(13, 14);  // SDA on IO13, SCL on IO14
+  Wire.begin(14, 15);  // SDA on IO13, SCL on IO14
   
   Serial.println("Initializing MPU6050...");
   mpu.initialize();  // Initialize the MPU6050 sensor
@@ -65,9 +65,8 @@ void loop() {
   float tdsValue = (133.42 * voltage * voltage * voltage - 255.86 * voltage * voltage + 857.39 * voltage) * 0.5;
 
   // --- Flex Sensor Reading ---
-  
-  float flex = analogRead(FLEX_PIN);
-  float flex_voltage = flex * (3.3 / 4095.0); // Convert flex value to voltage
+  //float flex = analogRead(FLEX_PIN);
+  //float flex_voltage = flex * (3.3 / 4095.0); // Convert flex value to voltage
 
   // --- MPU6050 Reading ---
   // Get raw accelerometer and gyroscope values
@@ -88,8 +87,6 @@ void loop() {
   float gyroZ = gz / 131.0 - gyroZ_offset;
 
   // Print the data in a comma-separated format, include a label
-  // Uncomment if you want to print temperature, TDS, and flex sensor readings
-  
   Serial.print("Temperature_C:");
   Serial.println(tempC);
   Serial.print("TDS_ADC:");
@@ -98,10 +95,10 @@ void loop() {
   Serial.println(voltage, 2);
   Serial.print("TDS_ppm:");
   Serial.println(tdsValue, 2);
-  Serial.print("Flex Value:");
-  Serial.println(flex);
-  Serial.print("Flex Voltage:");
-  Serial.println(flex_voltage, 2);
+  //Serial.print("Flex Value:");
+  //Serial.println(flex);
+  //Serial.print("Flex Voltage:");
+  //Serial.println(flex_voltage, 2);
   
 
   // Print MPU6050 data (acceleration and gyroscope)
