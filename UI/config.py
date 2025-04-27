@@ -34,3 +34,9 @@ QFrame {{
     border-radius: 12px;
 }}
 """
+
+USE_MOCK_DATA = False
+
+# If not using mock, configure serial connection
+SERIAL_PORT = "COM3"  # <-- Change to your real port name
+SERIAL_BAUDRATE = 115200

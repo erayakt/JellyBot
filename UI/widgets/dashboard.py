@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QTab
 from PyQt5.QtCore import Qt, QTimer
 import pyqtgraph as pg
 from config import *
-from utils.data import generate_mock_data
+from utils.data import generate_data
 from utils.ui_helpers import add_shadow
 from widgets.ocean_cube import OceanCubeCanvas
 from PyQt5.QtGui import QFont, QColor, QPalette
@@ -152,32 +152,56 @@ class OceanDashboard(QWidget):
     # ------------------------------------------------------------------
     def _tick(self):
         global mission_time
-        if not running: return
+        if not running:
+            return
 
-        mission_time += 0.4; m,s = divmod(int(mission_time),60); self.time_lbl.setText(f"{m:02d}:{s:02d}")
-        d = generate_mock_data(); data_log.append(d); i = len(data_log)
+        mission_time += 0.4
+        m, s = divmod(int(mission_time), 60)
+        self.time_lbl.setText(f"{m:02d}:{s:02d}")
+
+        d = generate_data()
+        if d is None:
+            return  # if serial not ready yet, skip frame
+
+        data_log.append(d)
+        i = len(data_log)
         self.steps.append(i)
-        self.temp.append(d['Temperature_C']); self.tds.append(d['TDS_ppm']); self.flex.append(d['Flex Voltage'])
+        self.temp.append(d['Temperature_C'])
+        self.tds.append(d['TDS_ppm'])
+        self.flex.append(d['Flex Voltage'])
         for ax in 'XYZ':
-            self.acc[ax].append(d[f'Accel{ax}']); self.gyro[ax].append(d[f'Gyro{ax}'])
-        if i > MAX_POINTS:
-            for seq in (self.steps, self.temp, self.tds, self.flex): seq.pop(0)
-            for dic in (self.acc, self.gyro):
-                for ax in 'XYZ': dic[ax].pop(0)
+            self.acc[ax].append(d[f'Accel{ax}'])
+            self.gyro[ax].append(d[f'Gyro{ax}'])
 
-        # numeric labels
+        if i > MAX_POINTS:
+            for seq in (self.steps, self.temp, self.tds, self.flex):
+                seq.pop(0)
+            for dic in (self.acc, self.gyro):
+                for ax in 'XYZ':
+                    dic[ax].pop(0)
+
+        # update UI
         self.temp_lbl.setText(f"🌡 Temp: {d['Temperature_C']:.2f} °C")
-        self.tds_lbl .setText(f"💧 TDS: {d['TDS_ppm']:.0f} ppm")
+        self.tds_lbl.setText(f"💧 TDS: {d['TDS_ppm']:.0f} ppm")
         self.flex_lbl.setText(f"📏 Flex: {d['Flex Voltage']:.2f} V")
 
-        # env sensor plots
-        for buf, plot, col in [(self.temp, self.plot_temp, COLOR_PRIMARY), (self.tds, self.plot_tds, COLOR_SECONDARY), (self.flex, self.plot_flex, COLOR_PRIMARY)]:
-            plot.plot(self.steps, buf, pen=pg.mkPen(col, width=3), clear=True); plot.setXRange(max(0,i-MAX_POINTS), i)
-        # xyz plots
+        # env plots
+        for buf, plot, col in [(self.temp, self.plot_temp, COLOR_PRIMARY),
+                            (self.tds, self.plot_tds, COLOR_SECONDARY),
+                            (self.flex, self.plot_flex, COLOR_PRIMARY)]:
+            plot.plot(self.steps, buf, pen=pg.mkPen(col, width=3), clear=True)
+            plot.setXRange(max(0, i - MAX_POINTS), i)
+
+        # motion plots
         for plot, series in [(self.accel_plot, self.acc), (self.gyro_plot, self.gyro)]:
             for idx, ax in enumerate('XYZ'):
                 plot.listDataItems()[idx].setData(self.steps, series[ax])
-            plot.setXRange(max(0,i-MAX_POINTS), i)
+            plot.setXRange(max(0, i - MAX_POINTS), i)
 
-        # cube
-        self.cube.update_orientation(np.radians(d['GyroX']), np.radians(d['GyroY']), np.radians(d['GyroZ']))
+        # update cube
+        self.cube.update_orientation(
+            np.radians(d['GyroX']),
+            np.radians(d['GyroY']),
+            np.radians(d['GyroZ'])
+        )
+
