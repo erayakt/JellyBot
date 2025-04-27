@@ -8,10 +8,10 @@
 #define ONE_WIRE_BUS 13
 
 // TDS setup (GPIO15)
-#define TDS_PIN 12
+#define TDS_PIN 2
 
 // Flexible Pressure Detector Pin
-//#define FLEX_PIN 12
+#define FLEX_PIN 12
 
 // Create a OneWire instance
 OneWire oneWire(ONE_WIRE_BUS);
@@ -65,8 +65,8 @@ void loop() {
   float tdsValue = (133.42 * voltage * voltage * voltage - 255.86 * voltage * voltage + 857.39 * voltage) * 0.5;
 
   // --- Flex Sensor Reading ---
-  //float flex = analogRead(FLEX_PIN);
-  //float flex_voltage = flex * (3.3 / 4095.0); // Convert flex value to voltage
+  float flex = analogRead(FLEX_PIN);
+  float flex_voltage = flex * (3.3 / 4095.0); // Convert flex value to voltage
 
   // --- MPU6050 Reading ---
   // Get raw accelerometer and gyroscope values
@@ -95,10 +95,10 @@ void loop() {
   Serial.println(voltage, 2);
   Serial.print("TDS_ppm:");
   Serial.println(tdsValue, 2);
-  //Serial.print("Flex Value:");
-  //Serial.println(flex);
-  //Serial.print("Flex Voltage:");
-  //Serial.println(flex_voltage, 2);
+  Serial.print("Flex Value:");
+  Serial.println(flex);
+  Serial.print("Flex Voltage:");
+  Serial.println(flex_voltage, 2);
   
 
   // Print MPU6050 data (acceleration and gyroscope)
