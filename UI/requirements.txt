@@ -1,0 +1,7 @@
+numpy
+matplotlib
+pandas
+pyserial
+dash 
+dash-bootstrap-components
+plotly
