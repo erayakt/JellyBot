@@ -35,8 +35,17 @@ QFrame {{
 }}
 """
 
-USE_MOCK_DATA = False
+GRAPH_Y_LIMITS = {
+    "Temperature_C": (0, 40),    # 0°C to 10°C
+    "TDS_ppm": (0, 500),          # 0 to 500 ppm
+    "Flex Voltage": (0, 4.0),     # 0V to 3.3V
+    "Accel": (-5, 5),             # -2g to 2g
+    "Gyro": (-200, 200),          # -200°/s to 200°/s
+}
+
+USE_MOCK_DATA = True
 
 # If not using mock, configure serial connection
-SERIAL_PORT = "COM3"  # <-- Change to your real port name
+SERIAL_PORT = "COM3" 
 SERIAL_BAUDRATE = 115200
+

@@ -9,6 +9,10 @@ from utils.ui_helpers import add_shadow
 from widgets.ocean_cube import OceanCubeCanvas
 from PyQt5.QtGui import QFont, QColor, QPalette
 
+from utils.life_detector import LifeDetector
+from PyQt5.QtWidgets import QProgressBar
+
+
 # State
 data_log = []
 running = False
@@ -23,6 +27,7 @@ class OceanDashboard(QWidget):
         self._setup_palette()
         self._init_buffers()
         self._build_ui()
+        self.detector = LifeDetector()
         self.timer = QTimer(self); self.timer.timeout.connect(self._tick); self.timer.start(400)
 
      # ------------------------------------------------------------------
@@ -116,19 +121,41 @@ class OceanDashboard(QWidget):
         return w
 
     # ------------------------------------------------------------------
+    from config import GRAPH_Y_LIMITS
+
     @staticmethod
     def _make_line_plot(title):
-        p = pg.PlotWidget(title=title); p.setTitle(title, color=COLOR_TEXT.name(), size="12pt")
-        p.getAxis('bottom').setPen(COLOR_TEXT.name()); p.getAxis('left').setPen(COLOR_TEXT.name())
+        p = pg.PlotWidget(title=title)
+        p.setTitle(title, color=COLOR_TEXT.name(), size="12pt")
+        p.getAxis('bottom').setPen(COLOR_TEXT.name())
+        p.getAxis('left').setPen(COLOR_TEXT.name())
+
+        if "Temp" in title:
+            p.setYRange(*GRAPH_Y_LIMITS["Temperature_C"])
+        elif "TDS" in title:
+            p.setYRange(*GRAPH_Y_LIMITS["TDS_ppm"])
+        elif "Flex" in title:
+            p.setYRange(*GRAPH_Y_LIMITS["Flex Voltage"])
+
         return p
 
     @staticmethod
     def _make_xyz_plot(title):
-        p = pg.PlotWidget(title=title); p.setTitle(title, color=COLOR_TEXT.name(), size="12pt")
-        p.getAxis('bottom').setPen(COLOR_TEXT.name()); p.getAxis('left').setPen(COLOR_TEXT.name())
-        for clr in ('r','g','b'):
+        p = pg.PlotWidget(title=title)
+        p.setTitle(title, color=COLOR_TEXT.name(), size="12pt")
+        p.getAxis('bottom').setPen(COLOR_TEXT.name())
+        p.getAxis('left').setPen(COLOR_TEXT.name())
+
+        if "Accel" in title:
+            p.setYRange(*GRAPH_Y_LIMITS["Accel"])
+        elif "Gyro" in title:
+            p.setYRange(*GRAPH_Y_LIMITS["Gyro"])
+
+        for clr in ('r', 'g', 'b'):
             p.plot([], [], pen=pg.mkPen(clr, width=2))
+
         return p
+
 
     # ------------------------------------------------------------------
     def _build_status_bar(self):
@@ -139,8 +166,29 @@ class OceanDashboard(QWidget):
 
     # ------------------------------------------------------------------
     def _start(self):
-        global running, mission_time
-        running, mission_time = True, 0; self.msg_lbl.setText("Running")
+        global running, mission_time, data_log
+        running, mission_time = True, 0
+        self.msg_lbl.setText("Running")
+
+        # CLEAR EVERYTHING
+        data_log.clear()
+
+        self.steps.clear()
+        self.temp.clear()
+        self.tds.clear()
+        self.flex.clear()
+        for ax in 'XYZ':
+            self.acc[ax].clear()
+            self.gyro[ax].clear()
+
+        # Clear plots immediately
+        for plot in (self.plot_temp, self.plot_tds, self.plot_flex):
+            plot.clear()
+        for plot in (self.accel_plot, self.gyro_plot):
+            for item in plot.listDataItems():
+                item.clear()
+
+        self.detector = LifeDetector()
 
     def _stop(self):
         global running
@@ -162,6 +210,58 @@ class OceanDashboard(QWidget):
         d = generate_data()
         if d is None:
             return  # if serial not ready yet, skip frame
+
+        # Prepare ML sample
+        sample = [
+            d["Temperature_C"],
+            d["TDS_ppm"],
+            d["AccelX"],
+            d["AccelY"],
+            d["AccelZ"],
+            d["GyroX"],
+            d["GyroY"],
+            d["GyroZ"],
+        ]
+
+        self.detector.add_sample(sample)
+        interest_score = self.detector.predict_interest(sample)
+
+        # Update message bar
+        self.msg_lbl.setText(f"🌟 Interest Score: {interest_score:.2f}")
+
+        # Optional: Color feedback based on score
+        if interest_score > 0.7:
+            self.msg_lbl.setStyleSheet("color: red; font-weight: bold;")
+        elif interest_score > 0.4:
+            self.msg_lbl.setStyleSheet("color: orange;")
+        else:
+            self.msg_lbl.setStyleSheet(f"color:{COLOR_TEXT.name()};")
+
+
+        # Update interest bar
+        self.interest_bar.setValue(int(interest_score * 100))
+
+        # Dynamic color
+        if interest_score > 0.7:
+            color = "red"
+        elif interest_score > 0.4:
+            color = "orange"
+        else:
+            color = "green"
+
+        self.interest_bar.setStyleSheet(f"""
+            QProgressBar {{
+                border: 2px solid #aaa;
+                border-radius: 8px;
+                background-color: #222;
+            }}
+            QProgressBar::chunk {{
+                background-color: {color};
+                border-radius: 6px;
+            }}
+        """)
+
+
 
         data_log.append(d)
         i = len(data_log)
@@ -205,3 +305,35 @@ class OceanDashboard(QWidget):
             np.radians(d['GyroZ'])
         )
 
+    def _build_status_bar(self):
+        bar = QStatusBar()
+        self.time_lbl = QLabel("00:00")
+        self.msg_lbl = QLabel("Ready")
+        
+        for w in (self.time_lbl, self.msg_lbl):
+            w.setFont(FONT_BODY)
+            w.setStyleSheet(f"color:{COLOR_TEXT.name()}")
+
+        self.interest_bar = QProgressBar()
+        self.interest_bar.setMaximumWidth(300)
+        self.interest_bar.setMinimumWidth(200)
+        self.interest_bar.setRange(0, 100)
+        self.interest_bar.setValue(0)
+        self.interest_bar.setFormat("")  # Hide percentage text
+        self.interest_bar.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid #aaa;
+                border-radius: 8px;
+                background-color: #222;
+            }
+            QProgressBar::chunk {
+                background-color: green;
+                border-radius: 6px;
+            }
+        """)
+
+        bar.addPermanentWidget(self.time_lbl)
+        bar.addWidget(self.msg_lbl)
+        bar.addPermanentWidget(self.interest_bar)
+
+        return bar
